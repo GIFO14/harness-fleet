@@ -1,14 +1,11 @@
 node_modules/
 .fleet/
-dist/
-apps/web/dist/
 coverage/
 *.db
 *.db-shm
 *.db-wal
 .env
 .fleet/
-dist/
 dist-demo/
 .superpowers/
 .worktrees/

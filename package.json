@@ -10,14 +10,13 @@
   "files": ["dist/", "apps/web/dist/", "docs/", "examples/", "README.md", "LICENSE", "NOTICE.md", "SECURITY.md", "CHANGELOG.md"],
   "scripts": {
     "build": "npm run build:web && tsup",
-    "build:web": "vite build apps/web --config vite.config.ts",
+    "build:web": "npm --workspace @harness-fleet/web run build",
     "dev": "tsx apps/cli/src/index.ts",
     "dev:daemon": "tsx apps/daemon/src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
-    "prepare": "npm run build",
     "prepack": "npm run check"
   },
   "dependencies": {
