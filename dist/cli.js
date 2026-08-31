@@ -114,7 +114,18 @@ program.command("launch").argument("<fleet-id>").option("--full-access-confirm",
   await api(`/fleets/${id}/launch`, jsonBody({ confirm: true, fullAccessConfirm: options.fullAccessConfirm === true }));
   print("Launched.");
 });
-program.command("list").action(async () => print(await api("/fleets")));
+program.command("list").option("--json", "show complete fleet records").action(async (options) => {
+  const fleets = await api("/fleets");
+  if (options.json) {
+    print(fleets);
+    return;
+  }
+  if (fleets.length === 0) {
+    print("No fleets.");
+    return;
+  }
+  for (const fleet of fleets) print(`${fleet.spec.fleet_name}	${fleet.id}`);
+});
 program.command("status").argument("<fleet-id>").action(async (id) => print(await api(`/fleets/${id}`)));
 program.command("logs").argument("<fleet-id>").argument("[node]").option("--after <id>", "event id", "0").action(async (id, node, options) => {
   const events = await api(`/fleets/${id}/events?after=${options.after}`);
