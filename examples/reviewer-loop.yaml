@@ -1,0 +1,18 @@
+version: 1
+fleet_name: reviewer-loop
+goal: Implement and iterate until two explicit reviewer approvals.
+orchestrator: { harness: claude-code, effort: high }
+config:
+  max_concurrent: 2
+  loop: { gate: review, max_iterations: 4, lgtm_count: 2 }
+workers:
+  - id: implementation
+    harness: codex
+    type: code-run
+    task: Implement the requested behavior with tests.
+  - id: review
+    harness: pi
+    type: review
+    task: Review correctness, security, and tests. End with LGTM or iterate.
+    depends_on: [implementation]
+    reviewer_for: [implementation]

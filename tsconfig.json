@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM"],
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@harness-fleet/protocol": ["packages/protocol/src/index.ts"],
+      "@harness-fleet/core": ["packages/core/src/index.ts"],
+      "@harness-fleet/storage": ["packages/storage/src/index.ts"],
+      "@harness-fleet/git-workspaces": ["packages/git-workspaces/src/index.ts"],
+      "@harness-fleet/adapter-pi": ["packages/adapter-pi/src/index.ts"],
+      "@harness-fleet/adapter-claude-code": ["packages/adapter-claude-code/src/index.ts"],
+      "@harness-fleet/adapter-codex": ["packages/adapter-codex/src/index.ts"],
+      "@harness-fleet/testing": ["packages/testing/src/index.ts"],
+      "@harness-fleet/daemon": ["apps/daemon/src/server.ts"]
+    }
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "test/**/*.ts", "vitest.config.ts", "tsup.config.ts"],
+  "exclude": ["dist", "node_modules", "apps/web/dist", "upstream"]
+}

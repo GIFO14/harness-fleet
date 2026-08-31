@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+  title: Harness Fleet local API
+  version: 0.1.0
+  description: Loopback-only API. Admin bearer auth is used unless a bridge capability is specified.
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port: { default: "0" }
+components:
+  securitySchemes:
+    admin: { type: http, scheme: bearer }
+    capability: { type: http, scheme: bearer }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string } }
+    FleetSpec:
+      type: object
+      required: [version, fleet_name, goal, orchestrator, workers]
+      properties:
+        version: { const: 1 }
+        fleet_name: { type: string }
+        goal: { type: string }
+        orchestrator:
+          type: object
+          required: [harness]
+          properties: { harness: { enum: [pi, claude-code, codex] }, model: { type: string }, effort: { type: string } }
+        workers: { type: array, items: { type: object } }
+paths:
+  /health:
+    get:
+      security: []
+      responses: { "200": { description: Daemon health } }
+  /doctor:
+    get:
+      security: [{ admin: [] }]
+      responses: { "200": { description: Harness probes and capabilities } }
+  /fleets:
+    get:
+      security: [{ admin: [] }]
+      responses: { "200": { description: Fleet list } }
+    post:
+      security: [{ admin: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { spec: { oneOf: [{ $ref: "#/components/schemas/FleetSpec" }, { type: string }] }, repoPath: { type: string } } } } }
+      responses: { "200": { description: Stored fleet }, "400": { description: Invalid spec } }
+  /fleets/design:
+    post:
+      security: [{ admin: [] }]
+      responses: { "200": { description: Orchestrator-produced fleet and preview } }
+  /fleets/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      security: [{ admin: [] }]
+      responses: { "200": { description: Fleet snapshot } }
+    put:
+      security: [{ admin: [] }]
+      responses: { "200": { description: Edited paused fleet } }
+  /fleets/{id}/launch:
+    post:
+      security: [{ admin: [] }]
+      description: Requires confirm=true; full access separately requires fullAccessConfirm=true.
+      responses: { "200": { description: Launched }, "409": { description: Confirmation required } }
+  /fleets/{id}/events:
+    get:
+      security: [{ admin: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: after, in: query, schema: { type: integer } }]
+      responses: { "200": { description: Ordered normalized events } }
+  /bridge/status:
+    get:
+      security: [{ capability: [] }]
+      responses: { "200": { description: Capability-scoped state } }
+  /bridge/messages:
+    post:
+      security: [{ capability: [] }]
+      responses: { "200": { description: Persistent message } }
+  /bridge/orchestrator/control:
+    post:
+      security: [{ capability: [] }]
+      responses: { "200": { description: Orchestrator-only control }, "403": { description: Worker denied } }

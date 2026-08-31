@@ -1,0 +1,27 @@
+version: 1
+fleet_name: three-harness-demo
+goal: Research, implement, and review one repository change using all three harnesses.
+orchestrator: { harness: codex, effort: high, permission_profile: workspace-write }
+config:
+  max_concurrent: 3
+  warn_cost_usd: 10
+  max_duration_minutes: 120
+  max_attempts: 3
+  loop: { gate: review, max_iterations: 3, lgtm_count: 1 }
+workers:
+  - id: research
+    harness: pi
+    type: research
+    task: Map the relevant code, risks, and acceptance tests.
+    permission_profile: read-only
+  - id: implementation
+    harness: claude-code
+    type: code-run
+    task: Implement the change in an isolated worktree with tests.
+    depends_on: [research]
+  - id: review
+    harness: codex
+    type: review
+    task: Review the implementation and test evidence. End with LGTM or iterate.
+    depends_on: [implementation]
+    reviewer_for: [implementation]

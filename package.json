@@ -1,0 +1,62 @@
+{
+  "name": "harness-fleet",
+  "version": "0.1.0",
+  "description": "Standalone local orchestration for Pi, Claude Code, and Codex agent fleets",
+  "type": "module",
+  "private": false,
+  "engines": { "node": ">=22.0.0" },
+  "workspaces": ["apps/*", "packages/*"],
+  "bin": { "fleet": "dist/cli.js" },
+  "files": ["dist/", "apps/web/dist/", "docs/", "examples/", "README.md", "LICENSE", "NOTICE.md", "SECURITY.md", "CHANGELOG.md"],
+  "scripts": {
+    "build": "npm run build:web && tsup",
+    "build:web": "npm --workspace @harness-fleet/web run build",
+    "dev": "tsx apps/cli/src/index.ts",
+    "dev:daemon": "tsx apps/daemon/src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepack": "npm run check"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^10.1.3",
+    "@fastify/websocket": "^11.2.0",
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "ajv": "^8.17.1",
+    "better-sqlite3": "^12.2.0",
+    "commander": "^14.0.0",
+    "env-paths": "^3.0.0",
+    "fastify": "^5.5.0",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@xyflow/react": "^12.8.4",
+    "@vitejs/plugin-react": "^4.7.0",
+    "fast-check": "^4.3.0",
+    "playwright": "^1.55.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "nanoid": "^3.3.18"
+  },
+  "license": "MIT",
+  "author": "Harness Fleet contributors",
+  "repository": { "type": "git", "url": "git+https://github.com/GIFO14/harness-fleet.git" },
+  "bugs": "https://github.com/GIFO14/harness-fleet/issues",
+  "homepage": "https://github.com/GIFO14/harness-fleet#readme",
+  "keywords": ["agents", "multi-agent", "orchestration", "claude-code", "codex", "pi", "dag"]
+}

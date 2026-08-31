@@ -1,0 +1,25 @@
+version: 1
+fleet_name: mixed-research
+goal: Compare the current implementation with primary documentation and produce a cited recommendation.
+orchestrator: { harness: codex, effort: high }
+config: { max_concurrent: 2, max_attempts: 2 }
+workers:
+  - id: code-map
+    harness: pi
+    type: research
+    task: Map the relevant repository modules and write output/code-map.md.
+    outputs:
+      - { path: output/code-map.md, kind: markdown, required: true }
+  - id: docs
+    harness: claude-code
+    type: research
+    task: Review the supplied primary documentation and write output/docs.md.
+    outputs:
+      - { path: output/docs.md, kind: markdown, required: true }
+  - id: synthesis
+    harness: codex
+    type: research
+    task: Reconcile both findings and write output/recommendation.md.
+    depends_on: [code-map, docs]
+    outputs:
+      - { path: output/recommendation.md, kind: markdown, required: true }

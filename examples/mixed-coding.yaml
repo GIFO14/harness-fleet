@@ -1,0 +1,21 @@
+version: 1
+fleet_name: mixed-coding
+goal: Implement a focused change with independent research and review.
+orchestrator: { harness: pi, effort: high }
+config: { max_concurrent: 2, max_attempts: 3, max_duration_minutes: 90 }
+workers:
+  - id: research
+    harness: codex
+    type: research
+    task: Identify the smallest safe implementation and test surface.
+  - id: implementation
+    harness: claude-code
+    type: code-run
+    task: Implement the change and its automated tests.
+    depends_on: [research]
+  - id: verification
+    harness: pi
+    type: review
+    task: Run focused verification and end with LGTM or iterate.
+    depends_on: [implementation]
+    reviewer_for: [implementation]

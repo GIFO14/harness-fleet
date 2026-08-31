@@ -1,0 +1,13 @@
+{
+  "name": "@harness-fleet/daemon",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": "./src/server.ts",
+  "dependencies": {
+    "@harness-fleet/core": "0.1.0",
+    "@harness-fleet/protocol": "0.1.0",
+    "@harness-fleet/storage": "0.1.0",
+    "fastify": "^5.5.0"
+  }
+}
