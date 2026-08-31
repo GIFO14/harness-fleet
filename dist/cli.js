@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   readDescriptor
-} from "./chunk-4EZ5LDRD.js";
+} from "./chunk-M2HTSGR5.js";
 
 // apps/cli/src/index.ts
 import { Command } from "commander";
@@ -197,8 +197,22 @@ daemon.command("status").action(async () => {
   print(descriptor ? { running: await healthy({ url: `http://127.0.0.1:${descriptor.port}`, token: descriptor.token }), pid: descriptor.pid, port: descriptor.port, startedAt: descriptor.startedAt } : { running: false });
 });
 daemon.command("stop").action(async () => {
+  const descriptor = readDescriptor();
+  if (!descriptor) {
+    print("Daemon is not running.");
+    return;
+  }
   await api("/shutdown", jsonBody({}));
-  print("Stopping.");
+  for (let i = 0; i < 100; i++) {
+    try {
+      process.kill(descriptor.pid, 0);
+    } catch {
+      print("Stopped.");
+      return;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  }
+  throw new Error(`daemon PID ${descriptor.pid} did not stop within 10 seconds`);
 });
 program.command("cleanup").argument("<fleet-id>").action(async (id) => {
   await api(`/fleets/${id}/cleanup`, jsonBody({}));

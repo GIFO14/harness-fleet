@@ -4,7 +4,7 @@ import {
   clearDescriptor,
   runtimePaths,
   writeDescriptor
-} from "./chunk-4EZ5LDRD.js";
+} from "./chunk-M2HTSGR5.js";
 
 // packages/storage/src/index.ts
 import Database from "better-sqlite3";
@@ -376,7 +376,10 @@ function launchProcess(harness, spec, sink, launch) {
   };
   child.stdout.on("data", (x) => consume("stdout", x));
   child.stderr.on("data", (x) => consume("stderr", x));
-  if (launch.input !== void 0) child.stdin.write(launch.input);
+  if (launch.input !== void 0) {
+    if (launch.closeInputAfterWrite) child.stdin.end(launch.input);
+    else child.stdin.write(launch.input);
+  }
   const settled = new Promise((resolve6) => {
     let spawnError;
     child.on("error", (error) => {
@@ -1247,6 +1250,7 @@ var CodexAdapter = class {
       command: this.command,
       args: [...this.prefixArgs, ...args],
       input: spec.prompt,
+      closeInputAfterWrite: true,
       env: spec.bridge?.env,
       parse: mapCodex,
       sessionFrom: (v) => object3(v)?.thread_id,
@@ -1272,6 +1276,7 @@ var CodexAdapter = class {
       command: this.command,
       args: [...this.prefixArgs, ...args],
       input: message,
+      closeInputAfterWrite: true,
       parse: mapCodex,
       sessionFrom: () => session.id,
       finalFrom: (v) => object3(v)?.type === "item.completed" && object3(object3(v)?.item)?.type === "agent_message" ? String(object3(object3(v)?.item)?.text ?? "") : void 0

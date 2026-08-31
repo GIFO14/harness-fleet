@@ -39,7 +39,7 @@ function acquireDaemonLock() {
   closeSync(fd);
   return () => {
     try {
-      unlinkSync(runtimePaths.lock);
+      if (readFileSync(runtimePaths.lock, "utf8").trim() === String(process.pid)) unlinkSync(runtimePaths.lock);
     } catch {
     }
   };
@@ -49,9 +49,10 @@ function writeDescriptor(port) {
   writeFileSync(runtimePaths.descriptor, JSON.stringify(value, null, 2), { mode: 384 });
   return value;
 }
-function clearDescriptor() {
+function clearDescriptor(ownerPid = process.pid) {
   try {
-    unlinkSync(runtimePaths.descriptor);
+    const descriptor = JSON.parse(readFileSync(runtimePaths.descriptor, "utf8"));
+    if (descriptor.pid === ownerPid) unlinkSync(runtimePaths.descriptor);
   } catch {
   }
 }
@@ -63,4 +64,4 @@ export {
   writeDescriptor,
   clearDescriptor
 };
-//# sourceMappingURL=chunk-4EZ5LDRD.js.map
+//# sourceMappingURL=chunk-M2HTSGR5.js.map

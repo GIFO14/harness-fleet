@@ -8,6 +8,8 @@ if (process.argv.includes("auth") || process.argv.includes("login")) {
   process.exit(0);
 }
 let handled = false;
+let exitOnEnd = false;
+process.stdin.on("end", () => { if (exitOnEnd) process.exit(0); });
 process.stdin.on("data", (chunk) => {
   if (handled) return; handled = true; const input = chunk.toString("utf8");
   if (harness === "pi") {
@@ -23,6 +25,9 @@ process.stdin.on("data", (chunk) => {
     process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "done" } }) + "\n");
     process.stdout.write(JSON.stringify({ type: "turn.completed" }) + "\n");
   }
-  if (!input.includes("HOLD")) setTimeout(() => process.exit(0), 100);
+  if (!input.includes("HOLD")) {
+    if (harness === "codex") exitOnEnd = true;
+    else setTimeout(() => process.exit(0), 100);
+  }
 });
 setTimeout(() => process.exit(0), 10_000);

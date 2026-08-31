@@ -8,6 +8,7 @@ export interface ProcessLaunch {
   command: string;
   args: string[];
   input?: string;
+  closeInputAfterWrite?: boolean;
   env?: NodeJS.ProcessEnv;
   parse: (value: unknown, stream: "stdout" | "stderr") => Partial<FleetEvent> | undefined;
   sessionFrom?: (value: unknown) => string | undefined;
@@ -58,7 +59,10 @@ export function launchProcess(harness: HarnessId, spec: HarnessRunSpec, sink: Ev
   };
   child.stdout.on("data", (x: Buffer) => consume("stdout", x));
   child.stderr.on("data", (x: Buffer) => consume("stderr", x));
-  if (launch.input !== undefined) child.stdin.write(launch.input);
+  if (launch.input !== undefined) {
+    if (launch.closeInputAfterWrite) child.stdin.end(launch.input);
+    else child.stdin.write(launch.input);
+  }
   const settled = new Promise<RunResult>((resolve) => {
     let spawnError: string | undefined;
     child.on("error", (error) => { spawnError = error.message; });

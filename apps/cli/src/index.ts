@@ -103,7 +103,17 @@ config.command("set").argument("<key>").argument("<value>").action(async (key, v
 const daemon = program.command("daemon");
 daemon.command("start").action(async () => { const client = await ensureDaemon(); print({ running: true, url: client.url }); });
 daemon.command("status").action(async () => { const descriptor = readDescriptor(); print(descriptor ? { running: await healthy({ url: `http://127.0.0.1:${descriptor.port}`, token: descriptor.token }), pid: descriptor.pid, port: descriptor.port, startedAt: descriptor.startedAt } : { running: false }); });
-daemon.command("stop").action(async () => { await api("/shutdown", jsonBody({})); print("Stopping."); });
+daemon.command("stop").action(async () => {
+  const descriptor = readDescriptor();
+  if (!descriptor) { print("Daemon is not running."); return; }
+  await api("/shutdown", jsonBody({}));
+  for (let i = 0; i < 100; i++) {
+    try { process.kill(descriptor.pid, 0); }
+    catch { print("Stopped."); return; }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  }
+  throw new Error(`daemon PID ${descriptor.pid} did not stop within 10 seconds`);
+});
 program.command("cleanup").argument("<fleet-id>").action(async (id) => { await api(`/fleets/${id}/cleanup`, jsonBody({})); print("Worktrees removed; branches preserved."); });
 
 program.parseAsync().catch((error) => { process.stderr.write(`fleet: ${error instanceof Error ? error.message : String(error)}\n`); process.exitCode = 1; });

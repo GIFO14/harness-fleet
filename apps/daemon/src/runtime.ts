@@ -27,7 +27,11 @@ export function acquireDaemonLock(): () => void {
   try { fd = openSync(runtimePaths.lock, "wx", 0o600); }
   catch { throw new Error("another Harness Fleet daemon is starting"); }
   writeFileSync(fd, String(process.pid)); closeSync(fd);
-  return () => { try { unlinkSync(runtimePaths.lock); } catch { /* already removed */ } };
+  return () => {
+    try {
+      if (readFileSync(runtimePaths.lock, "utf8").trim() === String(process.pid)) unlinkSync(runtimePaths.lock);
+    } catch { /* already removed or owned by a newer daemon */ }
+  };
 }
 
 export function writeDescriptor(port: number): DaemonDescriptor {
@@ -35,4 +39,9 @@ export function writeDescriptor(port: number): DaemonDescriptor {
   writeFileSync(runtimePaths.descriptor, JSON.stringify(value, null, 2), { mode: 0o600 }); return value;
 }
 
-export function clearDescriptor(): void { try { unlinkSync(runtimePaths.descriptor); } catch { /* already gone */ } }
+export function clearDescriptor(ownerPid = process.pid): void {
+  try {
+    const descriptor = JSON.parse(readFileSync(runtimePaths.descriptor, "utf8")) as DaemonDescriptor;
+    if (descriptor.pid === ownerPid) unlinkSync(runtimePaths.descriptor);
+  } catch { /* already gone or owned by a newer daemon */ }
+}

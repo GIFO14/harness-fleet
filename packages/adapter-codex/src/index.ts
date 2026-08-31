@@ -26,7 +26,7 @@ export class CodexAdapter implements HarnessAdapter {
       for (const [key, value] of Object.entries(spec.bridge.env)) args.push("-c", `mcp_servers.harness_fleet.env.${key}=${JSON.stringify(value)}`);
     }
     args.push("-");
-    const run = launchProcess(this.id, spec, sink, { command: this.command, args: [...this.prefixArgs, ...args], input: spec.prompt, env: spec.bridge?.env,
+    const run = launchProcess(this.id, spec, sink, { command: this.command, args: [...this.prefixArgs, ...args], input: spec.prompt, closeInputAfterWrite: true, env: spec.bridge?.env,
       parse: mapCodex, sessionFrom: (v) => object(v)?.thread_id as string | undefined,
       finalFrom: (v) => object(v)?.type === "item.completed" && object(object(v)?.item)?.type === "agent_message" ? String(object(object(v)?.item)?.text ?? "") : undefined });
     void run.settled.then((result) => { if (result.session) this.bridges.set(result.session.id, spec.bridge); });
@@ -42,7 +42,7 @@ export class CodexAdapter implements HarnessAdapter {
     }
     args.push(session.id, "-");
     const run = launchProcess(this.id, { ...spec, bridge }, sink, { command: this.command, args: [...this.prefixArgs, ...args],
-      input: message, parse: mapCodex, sessionFrom: () => session.id,
+      input: message, closeInputAfterWrite: true, parse: mapCodex, sessionFrom: () => session.id,
       finalFrom: (v) => object(v)?.type === "item.completed" && object(object(v)?.item)?.type === "agent_message" ? String(object(object(v)?.item)?.text ?? "") : undefined });
     this.runs.set(run.id, run); return run;
   }
