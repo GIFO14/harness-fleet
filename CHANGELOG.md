@@ -5,7 +5,8 @@ This project follows Semantic Versioning.
 ## [Unreleased]
 
 - Adapter contract fixtures and broader cross-platform process-tree tests.
-- Public repository coordinates and npm release.
+- Additional live harness fixtures and release assets.
+- Removed npm registry publishing; releases are distributed directly from GitHub.
 
 ## [0.1.0] - 2026-08-31
 

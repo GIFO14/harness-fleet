@@ -27,12 +27,18 @@ explicit while preserving a human launch gate and emergency controls.
 Requirements: Node.js 22+, Git, and at least one authenticated harness CLI.
 
 ```bash
-npm install
-npm run build
-npm link
+npm install -g github:GIFO14/harness-fleet
 
 fleet doctor
 fleet run "Research the auth flow, implement the fix, then review it" \
+  --orchestrator codex
+```
+
+Or run it without a global installation:
+
+```bash
+npx github:GIFO14/harness-fleet doctor
+npx github:GIFO14/harness-fleet run "Research, implement, and review the change" \
   --orchestrator codex
 ```
 
@@ -45,8 +51,8 @@ fleet launch <fleet-id>
 fleet open <fleet-id>
 ```
 
-`npx harness-fleet` and global npm installation use the same `fleet`
-executable.
+Both GitHub installation methods build and use the same `fleet` executable.
+No npm registry publication is required.
 
 ## Example
 
