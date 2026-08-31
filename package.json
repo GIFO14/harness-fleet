@@ -10,7 +10,7 @@
   "files": ["dist/", "apps/web/dist/", "docs/", "examples/", "README.md", "LICENSE", "NOTICE.md", "SECURITY.md", "CHANGELOG.md"],
   "scripts": {
     "build": "npm run build:web && tsup",
-    "build:web": "npm --prefix apps/web run build",
+    "build:web": "vite build apps/web --config vite.config.ts",
     "dev": "tsx apps/cli/src/index.ts",
     "dev:daemon": "tsx apps/daemon/src/index.ts",
     "test": "vitest run",
