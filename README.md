@@ -51,6 +51,11 @@ fleet launch <fleet-id>
 fleet open <fleet-id>
 ```
 
+The web control panel is operational, not read-only: create and select fleets,
+confirm launches, edit plans, add workers, pause or resume execution, replace
+the orchestrator, kill or relaunch individual workers, clean up worktrees, and
+inspect live events, attempts, messages, contracts, and reports.
+
 Both GitHub installation methods build and use the same `fleet` executable.
 No npm registry publication is required.
 
