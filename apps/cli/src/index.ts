@@ -21,7 +21,7 @@ async function ensureDaemon(): Promise<Client> {
   const built = join(root, "dist", "daemon.js");
   if (!existsSync(built)) throw new Error("Daemon build not found. Run `npm run build` once before using the development CLI.");
   const child = spawn(process.execPath, [built], { detached: true, stdio: "ignore", windowsHide: true }); child.unref();
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < 600; i++) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100)); const descriptor = readDescriptor();
     if (descriptor) { const client = { url: `http://127.0.0.1:${descriptor.port}`, token: descriptor.token }; if (await healthy(client)) return client; }
   }
