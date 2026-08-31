@@ -1,0 +1,14 @@
+node_modules/
+.fleet/
+dist/
+dist-demo/
+.superpowers/
+.worktrees/
+docs/screenshots/
+docs/superpowers/
+.archive/
+.DS_Store
+.impeccable/
+.claude/
+.codex/
+.worktrees/

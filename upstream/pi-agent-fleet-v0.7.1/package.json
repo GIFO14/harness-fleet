@@ -1,0 +1,60 @@
+{
+  "name": "pi-agent-fleet",
+  "version": "0.7.1",
+  "description": "DAG-of-agents fleets for pi — parallel workers with contracts, reviewer-gated iteration loops, and live progress",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.0",
+    "@earendil-works/pi-coding-agent": "^0.80.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/sagarsrc/pi-agent-fleet/v0.5.0/assets/canvas.png"
+  },
+  "license": "MIT",
+  "author": "Sagar Sarkale",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagarsrc/pi-agent-fleet.git"
+  },
+  "bugs": "https://github.com/sagarsrc/pi-agent-fleet/issues",
+  "homepage": "https://github.com/sagarsrc/pi-agent-fleet#readme",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "agents",
+    "multi-agent",
+    "dag",
+    "fleet",
+    "orchestration"
+  ],
+  "files": [
+    "src/",
+    "assets/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@xyflow/react": "^12.11.2",
+    "esbuild": "^0.21.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}
