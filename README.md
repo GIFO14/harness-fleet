@@ -27,7 +27,7 @@ explicit while preserving a human launch gate and emergency controls.
 Requirements: Node.js 22+, Git, and at least one authenticated harness CLI.
 
 ```bash
-npm install -g github:GIFO14/harness-fleet
+npm install -g https://github.com/GIFO14/harness-fleet/archive/refs/heads/main.tar.gz
 
 fleet doctor
 fleet run "Research the auth flow, implement the fix, then review it" \
