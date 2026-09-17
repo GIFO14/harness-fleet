@@ -50,7 +50,7 @@ function showPreview(value: any): void {
   if (preview.warnings?.length) { print("\nWarnings:"); for (const warning of preview.warnings) print(`  ! ${warning}`); }
 }
 
-const program = new Command().name("fleet").description("Standalone multi-harness agent fleet orchestrator").version("0.1.0");
+const program = new Command().name("fleet").description("Standalone multi-harness agent fleet orchestrator").version("0.1.1");
 program.command("run").argument("<goal>").requiredOption("--orchestrator <harness>", "pi, claude-code, or codex")
   .option("--model <id>").option("--effort <level>").option("--repo <path>", "repository", process.cwd()).option("-y, --yes", "confirm launch")
   .option("--full-access-confirm", "separately authorize any full-access agents")

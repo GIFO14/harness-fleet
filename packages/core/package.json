@@ -1,10 +1,10 @@
 {
   "name": "@harness-fleet/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@harness-fleet/protocol": "0.1.0",
+    "@harness-fleet/protocol": "0.1.1",
     "ajv": "^8.17.1",
     "yaml": "^2.8.1"
   }

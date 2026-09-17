@@ -84,7 +84,7 @@ Orchestrator: ${preview.orchestrator.harness}`);
     for (const warning of preview.warnings) print(`  ! ${warning}`);
   }
 }
-var program = new Command().name("fleet").description("Standalone multi-harness agent fleet orchestrator").version("0.1.0");
+var program = new Command().name("fleet").description("Standalone multi-harness agent fleet orchestrator").version("0.1.1");
 program.command("run").argument("<goal>").requiredOption("--orchestrator <harness>", "pi, claude-code, or codex").option("--model <id>").option("--effort <level>").option("--repo <path>", "repository", process.cwd()).option("-y, --yes", "confirm launch").option("--full-access-confirm", "separately authorize any full-access agents").action(async (goal, options) => {
   await api("/doctor");
   const result = await api("/fleets/design", jsonBody({ goal, orchestrator: options.orchestrator, model: options.model, effort: options.effort, repoPath: resolve(options.repo) }));

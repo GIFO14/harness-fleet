@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Harness Fleet local API
-  version: 0.1.0
+  version: 0.1.1
   description: Loopback-only API. Admin bearer auth is used unless a bridge capability is specified.
 servers:
   - url: http://127.0.0.1:{port}/api/v1
