@@ -17,6 +17,8 @@ const statusText: Record<string, string> = {
 };
 const friendlyStatus = (value?: string) => statusText[value ?? ""] ?? (value ?? "Unknown").replaceAll("_", " ");
 const eventText = (event: any) => {
+  if (event.type === "plan.feedback") return `You: ${String(event.payload?.feedback ?? "Plan feedback")}`;
+  if (event.type === "plan.revised") return String(event.payload?.summary ?? "Lead agent revised the plan");
   if (event.type === "session.started") return "Agent session started";
   if (event.type === "turn.started") return "Agent started working";
   if (event.type === "assistant.message") {
@@ -39,7 +41,7 @@ function App() {
   const [report, setReport] = useState(""); const [busy, setBusy] = useState("");
   const [actionForm, setActionForm] = useState<any>();
   const [goal, setGoal] = useState(""); const [repoPath, setRepoPath] = useState("."); const [harness, setHarness] = useState("codex"); const [designing, setDesigning] = useState(false);
-  const [editor, setEditor] = useState("");
+  const [editor, setEditor] = useState(""); const [feedback, setFeedback] = useState("");
   const loadList = () => api("/fleets").then(setFleets).catch((e) => setError(e.message));
   const load = (id: string) => api(`/fleets/${id}`).then((value) => { setFleet(value); setSelected(id); }).catch((e) => setError(e.message));
   useEffect(() => { void loadList(); }, []);
@@ -63,6 +65,15 @@ function App() {
   async function design(event: React.FormEvent) {
     event.preventDefault(); setDesigning(true); setError("");
     try { const value = await api("/fleets/design", post({ goal, orchestrator: harness, repoPath })); await loadList(); await load(value.fleet.id); } catch (e) { setError((e as Error).message); } finally { setDesigning(false); }
+  }
+  async function revisePlan(event: React.FormEvent) {
+    event.preventDefault(); const message = feedback.trim(); if (!message) return;
+    setBusy("revise"); setError("");
+    try {
+      await api(`/fleets/${fleet.id}/revise`, post({ feedback: message }));
+      setFeedback(""); await Promise.all([load(fleet.id), loadList()]);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(""); }
   }
   const control = async (action: string, body = {}) => {
     setBusy(action); setError("");
@@ -94,6 +105,7 @@ function App() {
   };
   const completed = fleet?.nodes.filter((node: any) => node.status === "completed").length ?? 0;
   const recentActivity = (fleet?.events ?? []).map((event: any) => ({ ...event, label: eventText(event) })).filter((event: any) => event.label).slice(-6).reverse();
+  const planConversation = (fleet?.events ?? []).filter((event: any) => event.type === "plan.feedback" || event.type === "plan.revised").slice(-6);
   const graphKey = fleet?.nodes.map((node: any) => `${node.nodeId}:${node.status}:${node.currentAttempt}`).join("|") ?? "empty";
   const guidance = fleet?.status === "waiting_for_confirmation" ? "Review the agents below. Nothing will run until you press Start fleet."
     : fleet?.status === "running" ? "Your agents are working. You can safely leave this page open or come back later."
@@ -121,6 +133,10 @@ function App() {
         <button disabled={!!busy} onClick={showReport}>View report</button><button disabled={!!busy} onClick={() => void load(fleet.id)}>Refresh</button>
       </div></header>
         <div className={`guidance guidance--${fleet.status}`}><strong>{friendlyStatus(fleet.status)}</strong><span>{guidance}</span></div>
+        {fleet.status === "waiting_for_confirmation" && <section className="plan-feedback"><div className="plan-feedback__intro"><span>Shape the plan</span><h2>Tell your lead agent what to change</h2><p>Use normal language. The lead agent will rebuild and validate the workflow, then return it here for your approval.</p></div>
+          {planConversation.length > 0 && <div className="plan-conversation">{planConversation.map((event: any) => <article key={event.id} className={event.type === "plan.feedback" ? "from-human" : "from-agent"}><strong>{event.type === "plan.feedback" ? "You" : "Lead agent"}</strong><p>{event.type === "plan.feedback" ? event.payload.feedback : event.payload.summary}</p></article>)}</div>}
+          <form onSubmit={revisePlan}><textarea aria-label="Plan feedback" placeholder="For example: use only three agents, let research run in parallel, and add an accessibility review" value={feedback} onChange={(event) => setFeedback(event.target.value)} maxLength={5000} required/><button className="launch" disabled={!!busy}>{busy === "revise" ? "Revising plan…" : "Revise plan"}</button></form>
+        </section>}
         <section className="metrics"><div><span>Progress</span><strong>{completed} of {fleet.nodes.length} agents done</strong></div><div><span>Lead agent</span><strong>{fleet.orchestrator?.harness ?? fleet.spec.orchestrator.harness}</strong></div><div><span>Runs</span><strong>{fleet.attempts.length || "None yet"}</strong></div><div><span>Cost tracking</span><strong>{fleet.attempts.some((x: any) => x.costQuality === "unavailable") ? "Partial" : "Available"}</strong></div></section>
         <div className="workspace"><section className="plan-panel"><div className="section-heading"><div><span>Workflow</span><h2>Your agent plan</h2></div><p>Click an agent to inspect its task and output.</p></div><div className="canvas"><ReactFlow key={graphKey} nodes={graph.nodes} edges={graph.edges} fitView fitViewOptions={{ padding: 0.35 }} minZoom={0.35} maxZoom={1.5} nodesConnectable={false} onNodeClick={(_, node) => setDrawer(fleet.nodes.find((x: any) => x.nodeId === node.id))}><Background color="#253147" gap={24}/><Controls/></ReactFlow></div></section>
           <aside className="activity"><div className="section-heading"><div><span>Live</span><h2>Recent activity</h2></div></div>{recentActivity.length ? recentActivity.map((event: any) => <article key={event.id}><b className={`event-dot event-dot--${event.type.replaceAll(".", "-")}`}/><div><strong>{event.nodeId}</strong><p>{event.label}</p><small>{new Date(event.at).toLocaleTimeString()}</small></div></article>) : <div className="activity-empty">Activity will appear here when the fleet starts.</div>}

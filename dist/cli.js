@@ -114,6 +114,10 @@ program.command("launch").argument("<fleet-id>").option("--full-access-confirm",
   await api(`/fleets/${id}/launch`, jsonBody({ confirm: true, fullAccessConfirm: options.fullAccessConfirm === true }));
   print("Launched.");
 });
+program.command("revise").argument("<fleet-id>").argument("<feedback>").description("Ask the lead agent to revise an unlaunched plan").action(async (id, feedback) => {
+  const result = await api(`/fleets/${id}/revise`, jsonBody({ feedback }));
+  print(result.summary);
+});
 program.command("list").option("--json", "show complete fleet records").action(async (options) => {
   const fleets = await api("/fleets");
   if (options.json) {

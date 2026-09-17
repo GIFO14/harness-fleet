@@ -62,6 +62,21 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 .guidance--completed { border-color: #285540; background: #0f1c19; }
 .guidance--needs_attention, .guidance--failed { border-color: #633641; background: #211216; }
 
+.plan-feedback { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(360px, 1.2fr); gap: 18px 24px; margin-top: 16px; padding: 18px; border: 1px solid #34435b; border-radius: 13px; background: linear-gradient(135deg, #121a27, #0e1520); }
+.plan-feedback__intro > span { color: #d4ff39; font: 10px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .12em; }
+.plan-feedback__intro h2 { margin: 6px 0; font-size: 17px; }
+.plan-feedback__intro p { margin: 0; color: #8f9caf; font-size: 12px; line-height: 1.5; }
+.plan-feedback form { display: flex; align-items: stretch; gap: 8px; }
+.plan-feedback textarea { flex: 1; min-height: 76px; padding: 11px 12px; resize: vertical; border: 1px solid #303d52; border-radius: 9px; outline: none; background: #090e16; color: #e2e8f1; font-size: 13px; line-height: 1.45; }
+.plan-feedback textarea:focus { border-color: #91af2d; box-shadow: 0 0 0 3px #d4ff3915; }
+.plan-feedback form button { align-self: stretch; min-width: 118px; border: 1px solid #d4ff39; border-radius: 9px; padding: 10px 14px; }
+.plan-feedback form button:disabled { opacity: .55; cursor: wait; }
+.plan-conversation { grid-column: 1 / -1; display: grid; gap: 8px; max-height: 190px; overflow: auto; padding-top: 2px; }
+.plan-conversation article { max-width: 80%; padding: 10px 12px; border: 1px solid #2a374b; border-radius: 10px 10px 10px 3px; background: #151d2a; }
+.plan-conversation article.from-human { justify-self: end; border-radius: 10px 10px 3px 10px; background: #1d2634; }
+.plan-conversation strong { color: #d4ff39; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.plan-conversation p { margin: 4px 0 0; color: #b7c1d0; font-size: 12px; line-height: 1.45; }
+
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
 .metrics div { border: 1px solid #202b3c; background: #101722; border-radius: 11px; padding: 14px; }
 .metrics span, .metrics strong { display: block; }
@@ -152,4 +167,6 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
   .actions { justify-content: flex-start; max-width: none; }
   .metrics { grid-template-columns: 1fr 1fr; }
   .guidance { align-items: flex-start; flex-direction: column; }
+  .plan-feedback { grid-template-columns: 1fr; }
+  .plan-feedback form { flex-direction: column; }
 }

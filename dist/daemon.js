@@ -110,6 +110,20 @@ var FleetStore = class {
   updateSpec(id, spec) {
     this.db.prepare("UPDATE fleets SET spec_json=?,updated_at=? WHERE id=?").run(JSON.stringify(spec), (/* @__PURE__ */ new Date()).toISOString(), id);
   }
+  replacePendingPlan(id, spec) {
+    const fleet = this.getFleet(id);
+    if (!fleet) throw new Error("fleet not found");
+    if (fleet.status !== "waiting_for_confirmation") throw new Error("only an unlaunched fleet plan can be replaced");
+    if (this.listAttempts(id).length) throw new Error("a fleet with attempts cannot replace its launch plan");
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE fleets SET spec_json=?,updated_at=? WHERE id=?").run(JSON.stringify(spec), now, id);
+      this.db.prepare("DELETE FROM nodes WHERE fleet_id=?").run(id);
+      const insert = this.db.prepare("INSERT INTO nodes(fleet_id,node_id,spec_json,status) VALUES (?,?,?,'pending')");
+      for (const worker of spec.workers) insert.run(id, worker.id, JSON.stringify(worker));
+    })();
+    writeFileSync(join(this.fleetArtifactDir(fleet), "fleet.json"), JSON.stringify(spec, null, 2));
+  }
   setOrchestratorSession(fleetId, sessionId, status, failureCount = 0) {
     this.db.prepare("UPDATE orchestrators SET session_id=?,status=?,failure_count=?,updated_at=? WHERE fleet_id=?").run(sessionId ?? null, status, failureCount, (/* @__PURE__ */ new Date()).toISOString(), fleetId);
   }
@@ -1020,7 +1034,8 @@ var PiAdapter = class {
     if (spec.bridge) args.push("-e", spec.bridge.args.at(-1) ?? spec.bridge.command);
     if (spec.model) args.push("--model", spec.model);
     if (spec.effort) args.push("--thinking", spec.effort);
-    if (spec.permissionProfile === "read-only") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish");
+    if (!spec.bridge) args.push("--no-tools");
+    else if (spec.permissionProfile === "read-only") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish");
     else if (spec.permissionProfile === "workspace-write") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_file_write,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish,fleet_add_node,fleet_edit_node,fleet_control,fleet_report");
     else args.push("--tools", "read,bash,edit,write,grep,find,ls,fleet_file_read,fleet_file_list,fleet_file_write,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish,fleet_add_node,fleet_edit_node,fleet_control,fleet_report");
     const run = launchProcess(this.id, spec, sink, {
@@ -1503,6 +1518,71 @@ async function createServer(options) {
     options.store.setOrchestratorSession(id, result.session?.id ?? sessionId, "ready");
     return { fleet, preview: preview(spec) };
   });
+  app2.post("/api/v1/fleets/:id/revise", async (request) => {
+    requireAdmin(request);
+    const fleet = options.store.getFleet(request.params.id);
+    const state = options.store.getOrchestrator(request.params.id);
+    if (!fleet || !state) throw Object.assign(new Error("fleet not found"), { statusCode: 404 });
+    if (fleet.status !== "waiting_for_confirmation") throw Object.assign(new Error("only an unlaunched plan can be revised conversationally"), { statusCode: 409 });
+    const feedback = String(request.body?.feedback ?? "").trim();
+    if (!feedback || feedback.length > 5e3) throw Object.assign(new Error("feedback must be between 1 and 5000 characters"), { statusCode: 400 });
+    if (orchestratorBusy.has(fleet.id)) throw Object.assign(new Error("the lead agent is already revising this plan"), { statusCode: 409 });
+    const adapter = adapters.get(state.harness);
+    if (!adapter) throw Object.assign(new Error("orchestrator harness is unavailable"), { statusCode: 409 });
+    const feedbackEvent = { fleetId: fleet.id, nodeId: "orchestrator", type: "plan.feedback", at: (/* @__PURE__ */ new Date()).toISOString(), payload: { feedback } };
+    feedbackEvent.id = options.store.appendEvent(feedbackEvent);
+    broadcast(feedbackEvent);
+    orchestratorBusy.add(fleet.id);
+    options.store.setOrchestratorSession(fleet.id, state.sessionId, "revising", state.failureCount);
+    try {
+      const attemptId = randomUUID3();
+      const prompt = [
+        "You are revising an unlaunched Harness Fleet plan after human feedback.",
+        "Return only one complete version: 1 fleet specification as YAML or JSON. Do not run commands, edit files, launch the fleet, or include commentary outside the specification.",
+        "Keep the existing orchestrator unchanged. Preserve the goal unless the feedback explicitly changes the desired outcome. Use only pi, claude-code, or codex harnesses. Minimize privileges and never introduce full-access.",
+        `Human feedback: ${feedback}`,
+        `Current specification: ${JSON.stringify(fleet.spec, null, 2)}`
+      ].join("\n\n");
+      const handle = await adapter.start({
+        fleetId: fleet.id,
+        nodeId: "orchestrator",
+        attemptId,
+        cwd: fleet.repoPath,
+        prompt,
+        model: state.model,
+        effort: state.effort,
+        permissionProfile: "read-only"
+      }, (event) => {
+        const normalized = { ...event, fleetId: fleet.id, nodeId: "orchestrator", attemptId };
+        const id = options.store.appendEvent(normalized);
+        broadcast({ ...normalized, id });
+      });
+      const result = await handle.settled;
+      if (result.exitCode !== 0 || !result.finalMessage) throw Object.assign(new Error(result.error ?? "lead agent did not return a revised plan"), { statusCode: 502 });
+      const revised = parseFleetSpec(extractSpecification(result.finalMessage));
+      revised.orchestrator = fleet.spec.orchestrator;
+      await validateCapabilities(revised, async (id) => {
+        const target = adapters.get(id);
+        if (!target) throw new Error(`unsupported harness: ${id}`);
+        return target.capabilities();
+      });
+      const before = fullAccessIds(fleet.spec);
+      const after = fullAccessIds(revised);
+      if ([...after].some((id) => !before.has(id))) throw Object.assign(new Error("conversational revisions cannot grant full access"), { statusCode: 409 });
+      options.store.replacePendingPlan(fleet.id, revised);
+      options.store.setOrchestratorSession(fleet.id, void 0, "ready", 0);
+      const summary = `Plan updated to ${revised.workers.length} agent${revised.workers.length === 1 ? "" : "s"}: ${revised.workers.map((worker) => worker.id).join(", ")}.`;
+      const revisedEvent = { fleetId: fleet.id, nodeId: "orchestrator", type: "plan.revised", at: (/* @__PURE__ */ new Date()).toISOString(), payload: { feedback, summary } };
+      revisedEvent.id = options.store.appendEvent(revisedEvent);
+      broadcast(revisedEvent);
+      return { fleet: options.store.getFleet(fleet.id), preview: preview(revised), summary };
+    } catch (error) {
+      options.store.setOrchestratorSession(fleet.id, state.sessionId, "ready", state.failureCount);
+      throw error;
+    } finally {
+      orchestratorBusy.delete(fleet.id);
+    }
+  });
   app2.post("/api/v1/fleets/:id/launch", async (request) => {
     requireAdmin(request);
     if (request.body.confirm !== true) throw Object.assign(new Error("human confirmation is required"), { statusCode: 409 });
@@ -1851,10 +1931,10 @@ function preview(spec) {
 function extractSpecification(message) {
   const fenced = message.match(/```(?:yaml|yml|json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1].trim();
-  const json = message.indexOf("{");
-  if (json >= 0) return message.slice(json).trim();
   const yaml = message.search(/^version\s*:/m);
-  return yaml >= 0 ? message.slice(yaml).trim() : message.trim();
+  const json = message.indexOf("{");
+  if (yaml >= 0 && (json < 0 || yaml < json)) return message.slice(yaml).trim();
+  return json >= 0 ? message.slice(json).trim() : message.trim();
 }
 function fullAccessIds(spec) {
   return /* @__PURE__ */ new Set([...spec.orchestrator.permission_profile === "full-access" ? ["orchestrator"] : [], ...spec.workers.filter((x) => x.permission_profile === "full-access").map((x) => x.id)]);

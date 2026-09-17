@@ -64,6 +64,15 @@ paths:
       security: [{ admin: [] }]
       description: Requires confirm=true; full access separately requires fullAccessConfirm=true.
       responses: { "200": { description: Launched }, "409": { description: Confirmation required } }
+  /fleets/{id}/revise:
+    post:
+      security: [{ admin: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      description: Ask the lead agent to replace an unlaunched plan from natural-language feedback. Cannot grant full access or launch the fleet.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [feedback], properties: { feedback: { type: string, minLength: 1, maxLength: 5000 } } } } }
+      responses: { "200": { description: Revised validated plan and summary }, "409": { description: Fleet already launched or revision in progress } }
   /fleets/{id}/events:
     get:
       security: [{ admin: [] }]

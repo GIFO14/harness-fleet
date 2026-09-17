@@ -142,6 +142,52 @@ export async function createServer(options: ServerOptions): Promise<FastifyInsta
     const fleet = options.store.createFleet(spec, cwd, id); options.store.setOrchestratorSession(id, result.session?.id ?? sessionId, "ready");
     return { fleet, preview: preview(spec) };
   });
+  app.post<{ Params: { id: string }; Body: { feedback: string } }>("/api/v1/fleets/:id/revise", async (request) => {
+    requireAdmin(request);
+    const fleet = options.store.getFleet(request.params.id); const state = options.store.getOrchestrator(request.params.id);
+    if (!fleet || !state) throw Object.assign(new Error("fleet not found"), { statusCode: 404 });
+    if (fleet.status !== "waiting_for_confirmation") throw Object.assign(new Error("only an unlaunched plan can be revised conversationally"), { statusCode: 409 });
+    const feedback = String(request.body?.feedback ?? "").trim();
+    if (!feedback || feedback.length > 5_000) throw Object.assign(new Error("feedback must be between 1 and 5000 characters"), { statusCode: 400 });
+    if (orchestratorBusy.has(fleet.id)) throw Object.assign(new Error("the lead agent is already revising this plan"), { statusCode: 409 });
+    const adapter = adapters.get(state.harness); if (!adapter) throw Object.assign(new Error("orchestrator harness is unavailable"), { statusCode: 409 });
+    const feedbackEvent: FleetEvent = { fleetId: fleet.id, nodeId: "orchestrator", type: "plan.feedback", at: new Date().toISOString(), payload: { feedback } };
+    feedbackEvent.id = options.store.appendEvent(feedbackEvent); broadcast(feedbackEvent);
+    orchestratorBusy.add(fleet.id); options.store.setOrchestratorSession(fleet.id, state.sessionId, "revising", state.failureCount);
+    try {
+      const attemptId = randomUUID();
+      const prompt = [
+        "You are revising an unlaunched Harness Fleet plan after human feedback.",
+        "Return only one complete version: 1 fleet specification as YAML or JSON. Do not run commands, edit files, launch the fleet, or include commentary outside the specification.",
+        "Keep the existing orchestrator unchanged. Preserve the goal unless the feedback explicitly changes the desired outcome. Use only pi, claude-code, or codex harnesses. Minimize privileges and never introduce full-access.",
+        `Human feedback: ${feedback}`,
+        `Current specification: ${JSON.stringify(fleet.spec, null, 2)}`,
+      ].join("\n\n");
+      const handle = await adapter.start({ fleetId: fleet.id, nodeId: "orchestrator", attemptId, cwd: fleet.repoPath, prompt,
+        model: state.model, effort: state.effort as any, permissionProfile: "read-only" }, (event) => {
+          const normalized = { ...event, fleetId: fleet.id, nodeId: "orchestrator", attemptId }; const id = options.store.appendEvent(normalized); broadcast({ ...normalized, id });
+        });
+      const result = await handle.settled;
+      if (result.exitCode !== 0 || !result.finalMessage) throw Object.assign(new Error(result.error ?? "lead agent did not return a revised plan"), { statusCode: 502 });
+      const revised = parseFleetSpec(extractSpecification(result.finalMessage)); revised.orchestrator = fleet.spec.orchestrator;
+      await validateCapabilities(revised, async (id) => {
+        const target = adapters.get(id); if (!target) throw new Error(`unsupported harness: ${id}`); return target.capabilities();
+      });
+      const before = fullAccessIds(fleet.spec); const after = fullAccessIds(revised);
+      if ([...after].some((id) => !before.has(id))) throw Object.assign(new Error("conversational revisions cannot grant full access"), { statusCode: 409 });
+      options.store.replacePendingPlan(fleet.id, revised);
+      // Planning sessions intentionally have no fleet-control bridge. Launch
+      // creates a fresh operational session after the human confirms the plan.
+      options.store.setOrchestratorSession(fleet.id, undefined, "ready", 0);
+      const summary = `Plan updated to ${revised.workers.length} agent${revised.workers.length === 1 ? "" : "s"}: ${revised.workers.map((worker) => worker.id).join(", ")}.`;
+      const revisedEvent: FleetEvent = { fleetId: fleet.id, nodeId: "orchestrator", type: "plan.revised", at: new Date().toISOString(), payload: { feedback, summary } };
+      revisedEvent.id = options.store.appendEvent(revisedEvent); broadcast(revisedEvent);
+      return { fleet: options.store.getFleet(fleet.id), preview: preview(revised), summary };
+    } catch (error) {
+      options.store.setOrchestratorSession(fleet.id, state.sessionId, "ready", state.failureCount);
+      throw error;
+    } finally { orchestratorBusy.delete(fleet.id); }
+  });
   app.post<{ Params: { id: string }; Body: { confirm: boolean; fullAccessConfirm?: boolean } }>("/api/v1/fleets/:id/launch", async (request) => {
     requireAdmin(request); if (request.body.confirm !== true) throw Object.assign(new Error("human confirmation is required"), { statusCode: 409 });
     const fleet = options.store.getFleet(request.params.id); const state = options.store.getOrchestrator(request.params.id);
@@ -372,8 +418,9 @@ function preview(spec: FleetSpec) {
 
 function extractSpecification(message: string): string {
   const fenced = message.match(/```(?:yaml|yml|json)?\s*([\s\S]*?)```/i); if (fenced) return fenced[1].trim();
-  const json = message.indexOf("{"); if (json >= 0) return message.slice(json).trim();
-  const yaml = message.search(/^version\s*:/m); return yaml >= 0 ? message.slice(yaml).trim() : message.trim();
+  const yaml = message.search(/^version\s*:/m); const json = message.indexOf("{");
+  if (yaml >= 0 && (json < 0 || yaml < json)) return message.slice(yaml).trim();
+  return json >= 0 ? message.slice(json).trim() : message.trim();
 }
 
 function fullAccessIds(spec: FleetSpec): Set<string> {

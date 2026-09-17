@@ -124,6 +124,8 @@ export type FleetEventType =
   | "review.verdict"
   | "message.sent"
   | "message.acknowledged"
+  | "plan.feedback"
+  | "plan.revised"
   | "node.status"
   | "fleet.status"
   | "error";

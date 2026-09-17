@@ -119,6 +119,21 @@ export class FleetStore {
     this.db.prepare("UPDATE fleets SET spec_json=?,updated_at=? WHERE id=?").run(JSON.stringify(spec), new Date().toISOString(), id);
   }
 
+  replacePendingPlan(id: string, spec: FleetSpec): void {
+    const fleet = this.getFleet(id);
+    if (!fleet) throw new Error("fleet not found");
+    if (fleet.status !== "waiting_for_confirmation") throw new Error("only an unlaunched fleet plan can be replaced");
+    if (this.listAttempts(id).length) throw new Error("a fleet with attempts cannot replace its launch plan");
+    const now = new Date().toISOString();
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE fleets SET spec_json=?,updated_at=? WHERE id=?").run(JSON.stringify(spec), now, id);
+      this.db.prepare("DELETE FROM nodes WHERE fleet_id=?").run(id);
+      const insert = this.db.prepare("INSERT INTO nodes(fleet_id,node_id,spec_json,status) VALUES (?,?,?,'pending')");
+      for (const worker of spec.workers) insert.run(id, worker.id, JSON.stringify(worker));
+    })();
+    writeFileSync(join(this.fleetArtifactDir(fleet), "fleet.json"), JSON.stringify(spec, null, 2));
+  }
+
   setOrchestratorSession(fleetId: string, sessionId: string | undefined, status: string, failureCount = 0): void {
     this.db.prepare("UPDATE orchestrators SET session_id=?,status=?,failure_count=?,updated_at=? WHERE fleet_id=?")
       .run(sessionId ?? null, status, failureCount, new Date().toISOString(), fleetId);

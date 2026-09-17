@@ -47,12 +47,13 @@ waits for a human confirmation. To start from a reviewed spec:
 
 ```bash
 fleet plan --file examples/three-harness-demo.yaml --repo /path/to/repo
+fleet revise <fleet-id> "Use fewer agents and add an accessibility review"
 fleet launch <fleet-id>
 fleet open <fleet-id>
 ```
 
 The web control panel is operational, not read-only: create and select fleets,
-confirm launches, edit plans, add workers, pause or resume execution, replace
+revise plans conversationally with the lead agent, confirm launches, edit plans, add workers, pause or resume execution, replace
 the orchestrator, kill or relaunch individual workers, clean up worktrees, and
 inspect live events, attempts, messages, contracts, and reports.
 

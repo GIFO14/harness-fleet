@@ -19,7 +19,8 @@ export class PiAdapter implements HarnessAdapter {
     if (spec.bridge) args.push("-e", spec.bridge.args.at(-1) ?? spec.bridge.command);
     if (spec.model) args.push("--model", spec.model);
     if (spec.effort) args.push("--thinking", spec.effort);
-    if (spec.permissionProfile === "read-only") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish");
+    if (!spec.bridge) args.push("--no-tools");
+    else if (spec.permissionProfile === "read-only") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish");
     else if (spec.permissionProfile === "workspace-write") args.push("--tools", "fleet_file_read,fleet_file_list,fleet_file_write,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish,fleet_add_node,fleet_edit_node,fleet_control,fleet_report");
     else args.push("--tools", "read,bash,edit,write,grep,find,ls,fleet_file_read,fleet_file_list,fleet_file_write,fleet_status,fleet_message,fleet_inbox,fleet_request_node,fleet_publish,fleet_add_node,fleet_edit_node,fleet_control,fleet_report");
     const run = launchProcess(this.id, spec, sink, {

@@ -54,4 +54,25 @@ describe("local API authority", () => {
     expect(store.listAttempts(fleet.id).every((attempt) => attempt.status !== "running")).toBe(true);
     await app.close(); store.close();
   });
+
+  it("revises an unlaunched plan conversationally and atomically replaces its nodes", async () => {
+    const dir = join(tmpdir(), `harness-fleet-revise-${randomUUID()}`); dirs.push(dir); await mkdir(dir);
+    const store = new FleetStore(join(dir, "db.sqlite"));
+    const revisedYaml = `version: 1\nfleet_name: revised\ngoal: test revision\norchestrator: { harness: pi }\nworkers:\n  - { id: research, harness: pi, type: research, task: research }\n  - { id: review, harness: pi, type: review, task: review, depends_on: [research] }\n`;
+    const adapter = new FakeHarness([{ finalMessage: revisedYaml }]);
+    const app = await createServer({ store, adminToken: "admin", adapters: new Map([["pi", adapter]]) });
+    const original = parseFleetSpec(`version: 1\nfleet_name: original\ngoal: test revision\norchestrator: { harness: pi }\nworkers:\n  - { id: old-worker, harness: pi, type: research, task: old }\n`);
+    const fleet = store.createFleet(original, dir);
+
+    const response = await app.inject({ method: "POST", url: `/api/v1/fleets/${fleet.id}/revise`, headers: { authorization: "Bearer admin" }, payload: { feedback: "Use a research agent followed by a reviewer" } });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(store.getFleet(fleet.id)?.spec.fleet_name).toBe("revised");
+    expect(store.listNodes(fleet.id).map((node) => node.nodeId)).toEqual(["research", "review"]);
+    expect(store.getOrchestrator(fleet.id)?.sessionId).toBeUndefined();
+    expect(adapter.starts[0]?.permissionProfile).toBe("read-only");
+    expect(adapter.starts[0]?.prompt).toContain("Use a research agent followed by a reviewer");
+    expect(store.listEvents(fleet.id).filter((event) => event.type.startsWith("plan.")).map((event) => event.type)).toEqual(["plan.feedback", "plan.revised"]);
+    await app.close(); store.close();
+  });
 });

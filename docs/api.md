@@ -12,6 +12,7 @@ The machine-readable contract is [openapi.yaml](openapi.yaml).
 - `GET /health`, `GET /doctor`
 - `GET|POST /fleets`, `GET|PUT /fleets/{id}`
 - `POST /fleets/design`
+- `POST /fleets/{id}/revise`
 - `POST /fleets/{id}/launch|pause|resume|kill|cleanup`
 - `POST /fleets/{id}/relaunch/{node}`
 - `GET /fleets/{id}/events|report`
@@ -20,6 +21,11 @@ The machine-readable contract is [openapi.yaml](openapi.yaml).
 
 Launch requires `{ "confirm": true }`; full access additionally requires
 `{ "fullAccessConfirm": true }`.
+
+Before launch, `POST /fleets/{id}/revise` accepts `{ "feedback": "..." }`.
+The lead agent returns a complete replacement plan, which is schema-validated
+and capability-checked before its pending nodes are atomically replaced.
+Conversational revisions cannot grant `full-access` or bypass launch confirmation.
 
 ## Agent bridge
 
