@@ -684,8 +684,10 @@ function orchestratorPrompt(goal) {
 
 // packages/core/src/report.ts
 function renderReport(fleet, attempts, events) {
-  const costKnown = attempts.filter((x) => x.costQuality !== "unavailable").reduce((sum, x) => sum + (x.costUsd ?? 0), 0);
+  const knownAttempts = attempts.filter((x) => x.costQuality !== "unavailable" && x.costUsd !== void 0);
+  const costKnown = knownAttempts.reduce((sum, x) => sum + x.costUsd, 0);
   const unavailable = attempts.filter((x) => x.costQuality === "unavailable").length;
+  const costSummary = attempts.length === 0 ? "No attempts yet" : knownAttempts.length === 0 ? `Unavailable for ${unavailable} attempt(s)` : `$${costKnown.toFixed(4)} known${unavailable ? `; unavailable for ${unavailable} attempt(s)` : ""}`;
   return [
     `# Fleet report: ${fleet.spec.fleet_name}`,
     "",
@@ -693,7 +695,7 @@ function renderReport(fleet, attempts, events) {
     `- Status: **${fleet.status}**`,
     `- Goal: ${fleet.spec.goal}`,
     `- Orchestrator: ${fleet.spec.orchestrator.harness}`,
-    `- Cost: $${costKnown.toFixed(4)} known${unavailable ? `; ${unavailable} attempt(s) unavailable` : ""}`,
+    `- Cost: ${costSummary}`,
     "",
     "## Attempts",
     "",

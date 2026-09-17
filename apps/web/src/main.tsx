@@ -19,7 +19,10 @@ const friendlyStatus = (value?: string) => statusText[value ?? ""] ?? (value ?? 
 const eventText = (event: any) => {
   if (event.type === "session.started") return "Agent session started";
   if (event.type === "turn.started") return "Agent started working";
-  if (event.type === "assistant.message") return event.payload?.item?.text ?? "Agent shared an update";
+  if (event.type === "assistant.message") {
+    const text = String(event.payload?.item?.text ?? "Agent shared an update").replaceAll(/\s+/g, " ");
+    return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+  }
   if (event.type === "tool.call") return "Agent used a tool";
   if (event.type === "tool.result") return "Tool finished";
   if (event.type === "node.status") return `Agent is ${friendlyStatus(event.payload?.status).toLowerCase()}`;
@@ -34,6 +37,7 @@ function App() {
   const [fleets, setFleets] = useState<any[]>([]); const [selected, setSelected] = useState<string | null>(queryId);
   const [fleet, setFleet] = useState<any>(); const [drawer, setDrawer] = useState<any>(); const [error, setError] = useState("");
   const [report, setReport] = useState(""); const [busy, setBusy] = useState("");
+  const [actionForm, setActionForm] = useState<any>();
   const [goal, setGoal] = useState(""); const [repoPath, setRepoPath] = useState("."); const [harness, setHarness] = useState("codex"); const [designing, setDesigning] = useState(false);
   const [editor, setEditor] = useState("");
   const loadList = () => api("/fleets").then(setFleets).catch((e) => setError(e.message));
@@ -66,32 +70,27 @@ function App() {
     catch (e) { setError((e as Error).message); }
     finally { setBusy(""); }
   };
-  const changeOrchestrator = async () => {
-    const replacement = window.prompt("Replacement harness: pi, claude-code, or codex", fleet.orchestrator?.harness ?? "codex");
-    if (!replacement) return;
-    const model = window.prompt("Native model ID (leave blank for harness default)", fleet.spec.orchestrator.model ?? "") ?? "";
-    setBusy("orchestrator"); setError("");
-    try { await api(`/fleets/${fleet.id}/orchestrator`, { method: "PUT", body: JSON.stringify({ harness: replacement, model: model || undefined }) }); await load(fleet.id); }
-    catch (e) { setError((e as Error).message); }
-    finally { setBusy(""); }
-  };
-  const addWorker = () => {
-    const id = window.prompt("Worker ID"); if (!id) return;
-    const task = window.prompt("Worker task"); if (!task) return;
-    const workerHarness = window.prompt("Harness: pi, claude-code, or codex", "codex"); if (!workerHarness) return;
-    const spec = { ...fleet.spec, workers: [...fleet.spec.workers, { id, harness: workerHarness, type: "code-run", task, permission_profile: "workspace-write", worktree: true, depends_on: [], outputs: [] }] };
-    setEditor(JSON.stringify(spec, null, 2));
-  };
+  const changeOrchestrator = () => setActionForm({ kind: "lead", harness: fleet.orchestrator?.harness ?? "codex", model: fleet.spec.orchestrator.model ?? "" });
+  const addWorker = () => setActionForm({ kind: "add", id: "", task: "", harness: "codex", model: "" });
   const showReport = async () => {
     setBusy("report"); setError("");
     try { setReport(await api(`/fleets/${fleet.id}/report`)); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(""); }
   };
-  const relaunchNode = async (node: any) => {
-    const nextHarness = window.prompt("Harness for the new attempt", node.spec.harness); if (!nextHarness) return;
-    const nextModel = window.prompt("Native model ID (leave blank for current/default)", node.spec.model ?? ""); if (nextModel === null) return;
-    await control(`relaunch/${node.nodeId}`, { harness: nextHarness, model: nextModel || undefined });
+  const relaunchNode = (node: any) => setActionForm({ kind: "relaunch", nodeId: node.nodeId, harness: node.spec.harness, model: node.spec.model ?? "" });
+  const submitActionForm = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(actionForm.kind); setError("");
+    try {
+      if (actionForm.kind === "lead") await api(`/fleets/${fleet.id}/orchestrator`, { method: "PUT", body: JSON.stringify({ harness: actionForm.harness, model: actionForm.model || undefined }) });
+      if (actionForm.kind === "relaunch") await api(`/fleets/${fleet.id}/relaunch/${actionForm.nodeId}`, post({ harness: actionForm.harness, model: actionForm.model || undefined }));
+      if (actionForm.kind === "add") {
+        const worker = { id: actionForm.id, harness: actionForm.harness, model: actionForm.model || undefined, type: "code-run", task: actionForm.task, permission_profile: "workspace-write", worktree: true, depends_on: [], outputs: [] };
+        await api(`/fleets/${fleet.id}`, { method: "PUT", body: JSON.stringify({ spec: { ...fleet.spec, workers: [...fleet.spec.workers, worker] } }) });
+      }
+      setActionForm(undefined); setDrawer(undefined); await Promise.all([load(fleet.id), loadList()]);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(""); }
   };
   const completed = fleet?.nodes.filter((node: any) => node.status === "completed").length ?? 0;
   const recentActivity = (fleet?.events ?? []).map((event: any) => ({ ...event, label: eventText(event) })).filter((event: any) => event.label).slice(-6).reverse();
@@ -138,6 +137,11 @@ function App() {
       <div className="drawer-actions"><button disabled={!!busy} onClick={() => relaunchNode(drawer)}>Run again or reassign</button>{drawer.status === "running" && <button disabled={!!busy} className="danger" onClick={() => { if (window.confirm(`Stop agent ${drawer.nodeId}?`)) void control("kill", { nodeId: drawer.nodeId }); }}>Stop agent</button>}</div>
     </div>}
     {editor && <div className="modal"><div><p className="eyebrow">Editable launch preview</p><h2>Fleet specification</h2><textarea value={editor} onChange={(e) => setEditor(e.target.value)} /><footer><button onClick={() => setEditor("")}>Cancel</button><button className="launch" onClick={async () => { try { const spec = JSON.parse(editor); const asksFull = [spec.orchestrator, ...spec.workers].some((x: any) => x.permission_profile === "full-access"); const fullAccessConfirm = asksFull ? window.confirm("Authorize full access in this edited plan?") : false; if (asksFull && !fullAccessConfirm) return; await api(`/fleets/${fleet.id}`, { method: "PUT", body: JSON.stringify({ spec, fullAccessConfirm }) }); setEditor(""); await load(fleet.id); } catch (e) { setError((e as Error).message); } }}>Validate & save</button></footer></div></div>}
+    {actionForm && <div className="modal"><form className="action-form" onSubmit={submitActionForm}><span className="form-kicker">{actionForm.kind === "add" ? "Add agent" : actionForm.kind === "lead" ? "Change lead agent" : "Run agent again"}</span><h2>{actionForm.kind === "add" ? "Add another agent to the plan" : actionForm.kind === "lead" ? "Choose who leads this fleet" : `New run for ${actionForm.nodeId}`}</h2>
+      {actionForm.kind === "add" && <><label><span>Agent name</span><input autoFocus required pattern="[a-z0-9][a-z0-9-]*" placeholder="review-code" value={actionForm.id} onChange={(e) => setActionForm({ ...actionForm, id: e.target.value })}/><small>Lowercase letters, numbers, and hyphens.</small></label><label><span>What should this agent do?</span><textarea required placeholder="Review the implementation and list any issues" value={actionForm.task} onChange={(e) => setActionForm({ ...actionForm, task: e.target.value })}/></label></>}
+      <label><span>{actionForm.kind === "lead" ? "Lead agent" : "Harness"}</span><select value={actionForm.harness} onChange={(e) => setActionForm({ ...actionForm, harness: e.target.value })}><option value="codex">Codex</option><option value="claude-code">Claude Code</option><option value="pi">Pi</option></select></label>
+      <label><span>Model <small>optional</small></span><input placeholder="Use the harness default" value={actionForm.model} onChange={(e) => setActionForm({ ...actionForm, model: e.target.value })}/></label>
+      <footer><button type="button" onClick={() => setActionForm(undefined)}>Cancel</button><button disabled={!!busy} className="launch" type="submit">{actionForm.kind === "add" ? "Add agent" : actionForm.kind === "lead" ? "Change lead" : "Start new run"}</button></footer></form></div>}
     {report && <div className="modal"><div className="report-modal"><p className="eyebrow">Fleet report</p><h2>{fleet?.spec.fleet_name}</h2><pre>{report}</pre><footer><button onClick={() => setReport("")}>Close</button></footer></div></div>}
   </div>;
 }
