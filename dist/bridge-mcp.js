@@ -17,7 +17,7 @@ async function call(path, init) {
   return value;
 }
 var result = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
-var server = new McpServer({ name: "harness-fleet", version: "0.1.0" });
+var server = new McpServer({ name: "harness-fleet", version: "0.1.1" });
 server.registerTool("fleet_status", { description: "Read your authorized fleet/node status", inputSchema: {} }, async () => result(await call("/status")));
 server.registerTool("fleet_inbox", { description: "Read pending messages addressed to this session", inputSchema: {} }, async () => result(await call("/inbox")));
 server.registerTool("fleet_message", {

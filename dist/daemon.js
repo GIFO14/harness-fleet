@@ -1435,7 +1435,7 @@ async function createServer(options) {
     if (capability.scope !== "orchestrator") throw Object.assign(new Error("orchestrator capability required"), { statusCode: 403 });
     return capability;
   };
-  app2.get("/api/v1/health", async () => ({ ok: true, pid: process.pid, version: "0.1.0" }));
+  app2.get("/api/v1/health", async () => ({ ok: true, pid: process.pid, version: "0.1.1" }));
   app2.get("/api/v1/openapi.yaml", async (_request, reply) => reply.type("application/yaml").send(readFileSync3(join6(packageRoot, "docs", "openapi.yaml"), "utf8")));
   app2.get("/api/v1/doctor", async (request) => {
     requireAdmin(request);

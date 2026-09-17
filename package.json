@@ -1,6 +1,6 @@
 {
   "name": "harness-fleet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Standalone local orchestration for Pi, Claude Code, and Codex agent fleets",
   "type": "module",
   "private": false,

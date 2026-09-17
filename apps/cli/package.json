@@ -1,11 +1,11 @@
 {
   "name": "@harness-fleet/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "private": true,
   "dependencies": {
-    "@harness-fleet/core": "0.1.0",
-    "@harness-fleet/daemon": "0.1.0",
+    "@harness-fleet/core": "0.1.1",
+    "@harness-fleet/daemon": "0.1.1",
     "commander": "^14.0.0"
   }
 }
