@@ -12,7 +12,7 @@ let exitOnEnd = false;
 process.stdin.on("end", () => { if (exitOnEnd) process.exit(0); });
 process.stdin.on("data", (chunk) => {
   if (handled) return; handled = true; const input = chunk.toString("utf8");
-  if (harness === "pi") {
+  if (harness === "pi" || harness === "pi-persistent") {
     process.stdout.write(JSON.stringify({ type: "agent_start", sessionId: "pi-session" }) + "\n");
     process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "done" }], usage: { cost: { total: 0.01 } } } }) + "\n");
     process.stdout.write(JSON.stringify({ type: "agent_end" }) + "\n");
@@ -26,7 +26,7 @@ process.stdin.on("data", (chunk) => {
     process.stdout.write(JSON.stringify({ type: "turn.completed" }) + "\n");
   }
   if (!input.includes("HOLD")) {
-    if (harness === "codex") exitOnEnd = true;
+    if (harness === "codex" || harness === "pi-persistent") exitOnEnd = true;
     else setTimeout(() => process.exit(0), 100);
   }
 });

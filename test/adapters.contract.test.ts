@@ -25,3 +25,13 @@ describe.each(factories)("%s adapter contract", (_name, factory) => {
     const held = await adapter.start(spec("HOLD"), () => {}); await adapter.cancel(held, 0); expect((await held.settled).exitCode).not.toBe(0);
   }, 15_000);
 });
+
+describe("Pi RPC lifecycle", () => {
+  it("closes the persistent RPC process when Pi emits agent_end", async () => {
+    const adapter = new PiAdapter(process.execPath, [fixture, "pi-persistent"]);
+    const handle = await adapter.start(spec(), () => {});
+    const result = await handle.settled;
+    expect(result.exitCode).toBe(0);
+    expect(result.finalMessage).toBe("done");
+  }, 3_000);
+});

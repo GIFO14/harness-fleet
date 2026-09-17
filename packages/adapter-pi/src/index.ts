@@ -31,6 +31,7 @@ export class PiAdapter implements HarnessAdapter {
         const event = object(value); const message = object(event?.message);
         return event?.type === "message_end" && message?.role === "assistant" ? textContent(message.content) : undefined;
       },
+      closeInputWhen: (value) => object(value)?.type === "agent_end",
     });
     void run.settled.then((result) => { if (result.session) this.bridges.set(result.session.id, spec.bridge); });
     this.runs.set(run.id, run); return run;
@@ -43,7 +44,8 @@ export class PiAdapter implements HarnessAdapter {
     if (spec.bridge) args.push("-e", spec.bridge.args.at(-1) ?? spec.bridge.command);
     const run = launchProcess(this.id, spec, sink, { command: this.command, args: [...this.prefixArgs, ...args], input: JSON.stringify({ type: "prompt", message }) + "\n", env: spec.bridge?.env,
       parse: (value, stream) => mapPi(value, stream), sessionFrom: () => session.id,
-      finalFrom: (value) => { const event = object(value); const response = object(event?.message); return event?.type === "message_end" && response?.role === "assistant" ? textContent(response.content) : undefined; } });
+      finalFrom: (value) => { const event = object(value); const response = object(event?.message); return event?.type === "message_end" && response?.role === "assistant" ? textContent(response.content) : undefined; },
+      closeInputWhen: (value) => object(value)?.type === "agent_end" });
     this.runs.set(run.id, run); return run;
   }
   async send(handle: RunHandle, message: RoutedMessage): Promise<DeliveryResult> {

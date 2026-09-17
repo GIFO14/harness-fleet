@@ -13,6 +13,7 @@ export interface ProcessLaunch {
   parse: (value: unknown, stream: "stdout" | "stderr") => Partial<FleetEvent> | undefined;
   sessionFrom?: (value: unknown) => string | undefined;
   finalFrom?: (value: unknown) => string | undefined;
+  closeInputWhen?: (value: unknown) => boolean;
 }
 
 export interface ManagedRun extends RunHandle { process: ChildProcessWithoutNullStreams }
@@ -30,12 +31,12 @@ function resolvedCommand(command: string): { command: string; prefix: string[] }
   return { command, prefix: [] };
 }
 
-function emitLine(spec: HarnessRunSpec, sink: EventSink, launch: ProcessLaunch, line: string, stream: "stdout" | "stderr"): { session?: string; final?: string } {
+function emitLine(spec: HarnessRunSpec, sink: EventSink, launch: ProcessLaunch, line: string, stream: "stdout" | "stderr"): { session?: string; final?: string; closeInput?: boolean } {
   let raw: unknown = line;
   try { raw = JSON.parse(line); } catch { /* process output is still preserved */ }
   const mapped = launch.parse(raw, stream) ?? { type: "process.output", payload: { stream, text: line } };
   void sink({ fleetId: spec.fleetId, nodeId: spec.nodeId, attemptId: spec.attemptId, at: new Date().toISOString(), raw, ...mapped } as FleetEvent);
-  return { session: launch.sessionFrom?.(raw), final: launch.finalFrom?.(raw) };
+  return { session: launch.sessionFrom?.(raw), final: launch.finalFrom?.(raw), closeInput: launch.closeInputWhen?.(raw) };
 }
 
 export function launchProcess(harness: HarnessId, spec: HarnessRunSpec, sink: EventSink, launch: ProcessLaunch): ManagedRun {
@@ -55,6 +56,7 @@ export function launchProcess(harness: HarnessId, spec: HarnessRunSpec, sink: Ev
       if (!line) continue;
       const found = emitLine(spec, sink, launch, line, stream);
       sessionId = found.session ?? sessionId; finalMessage = found.final ?? finalMessage;
+      if (found.closeInput && !child.stdin.destroyed) child.stdin.end();
     }
   };
   child.stdout.on("data", (x: Buffer) => consume("stdout", x));

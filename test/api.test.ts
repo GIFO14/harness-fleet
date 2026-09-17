@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { FleetStore } from "@harness-fleet/storage";
 import { createServer } from "../apps/daemon/src/server.js";
 import { parseFleetSpec } from "@harness-fleet/core";
+import { FakeHarness } from "@harness-fleet/testing";
 
 const dirs: string[] = [];
 afterEach(async () => Promise.all(dirs.splice(0).map((x) => rm(x, { recursive: true, force: true }))));
@@ -31,5 +32,26 @@ describe("local API authority", () => {
     const orchestratorEscalation = await app.inject({ method: "POST", url: "/api/v1/bridge/orchestrator/nodes", headers: { authorization: `Bearer ${orchestratorToken}` },
       payload: { id: "unsafe", harness: "pi", type: "code-run", task: "unsafe", permission_profile: "full-access" } });
     expect(orchestratorEscalation.statusCode).toBe(403); await app.close(); store.close();
+  });
+
+  it("launches an imported fleet before initializing its orchestrator without recursion", async () => {
+    const dir = join(tmpdir(), `harness-fleet-launch-${randomUUID()}`); dirs.push(dir); await mkdir(dir);
+    const store = new FleetStore(join(dir, "db.sqlite"));
+    const adapter = new FakeHarness([{ finalMessage: "Ready to monitor." }, { finalMessage: "worker done" }]);
+    const app = await createServer({ store, adminToken: "admin", adapters: new Map([["pi", adapter]]) });
+    const spec = parseFleetSpec(`version: 1\nfleet_name: imported\ngoal: test launch\norchestrator: { harness: pi }\nworkers:\n  - { id: worker, harness: pi, type: research, task: test }\n`);
+    const fleet = store.createFleet(spec, dir);
+
+    const launched = await app.inject({ method: "POST", url: `/api/v1/fleets/${fleet.id}/launch`, headers: { authorization: "Bearer admin" }, payload: { confirm: true } });
+
+    expect(launched.statusCode).toBe(200);
+    expect(store.getFleet(fleet.id)?.status).toBe("running");
+    expect(adapter.starts.map((run) => run.nodeId)).toEqual(["orchestrator", "worker"]);
+    expect(adapter.starts[0]?.prompt).toContain("already been confirmed by a human and launched by the daemon");
+    for (let i = 0; i < 50 && store.listAttempts(fleet.id).some((attempt) => attempt.status === "running"); i += 1) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+    }
+    expect(store.listAttempts(fleet.id).every((attempt) => attempt.status !== "running")).toBe(true);
+    await app.close(); store.close();
   });
 });

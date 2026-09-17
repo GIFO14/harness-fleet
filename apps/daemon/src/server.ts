@@ -19,13 +19,13 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = existsSync(join(moduleDir, "..", "package.json")) ? resolve(moduleDir, "..") : resolve(moduleDir, "../../..");
 const distDir = join(packageRoot, "dist");
 
-export interface ServerOptions { store: FleetStore; adminToken: string; host?: string; port?: number }
+export interface ServerOptions { store: FleetStore; adminToken: string; host?: string; port?: number; adapters?: Map<HarnessId, HarnessAdapter> }
 
 export async function createServer(options: ServerOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 });
   await app.register(cookie, { secret: options.adminToken });
   await app.register(websocket);
-  const adapters = new Map<HarnessId, HarnessAdapter>([["pi", new PiAdapter()], ["claude-code", new ClaudeCodeAdapter()], ["codex", new CodexAdapter()]]);
+  const adapters = options.adapters ?? new Map<HarnessId, HarnessAdapter>([["pi", new PiAdapter()], ["claude-code", new ClaudeCodeAdapter()], ["codex", new CodexAdapter()]]);
   for (const orphan of options.store.recoverRunning()) {
     if (orphan.pid) {
       if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(orphan.pid), "/T", "/F"], { windowsHide: true });
@@ -147,13 +147,33 @@ export async function createServer(options: ServerOptions): Promise<FastifyInsta
     const fleet = options.store.getFleet(request.params.id); const state = options.store.getOrchestrator(request.params.id);
     if (!fleet || !state) throw Object.assign(new Error("fleet not found"), { statusCode: 404 });
     if (!state.sessionId) {
+      // Imported specifications do not have an orchestrator session yet. Move the
+      // fleet to running before starting that session so the agent cannot recurse
+      // through `fleet launch`. Dispatch remains gated while the orchestrator is
+      // marked as starting, then begins as soon as the session is ready.
+      options.store.setOrchestratorSession(fleet.id, undefined, "starting", state.failureCount);
+      await scheduler.confirmAndLaunch(request.params.id, request.body.fullAccessConfirm === true);
       const adapter = adapters.get(state.harness)!; const token = options.store.issueToken({ scope: "orchestrator", fleetId: fleet.id }, 7 * 24 * 60 * 60_000); const isPi = state.harness === "pi";
       const bridge = { command: process.execPath, args: [join(distDir, isPi ? "bridge-pi.js" : "bridge-mcp.js")], env: { HARNESS_FLEET_URL: `http://127.0.0.1:${(app.server.address() as any)?.port ?? options.port ?? 0}`, HARNESS_FLEET_TOKEN: token } };
       const handle = await adapter.start({ fleetId: fleet.id, nodeId: "orchestrator", attemptId: randomUUID(), cwd: fleet.repoPath,
-        prompt: `Operate this human-approved fleet. Goal: ${fleet.spec.goal}\nPlan: ${JSON.stringify(fleet.spec)}`, model: state.model, effort: state.effort as any,
+        prompt: [
+          "This fleet has already been confirmed by a human and launched by the daemon.",
+          "Do not run `fleet launch`, do not create another fleet, and do not re-plan it.",
+          "Act as its lead agent from now on. Use the Harness Fleet bridge to inspect reports, react to events, message workers, and apply only in-scope controls.",
+          `Goal: ${fleet.spec.goal}`,
+          `Approved plan: ${JSON.stringify(fleet.spec)}`,
+          "Acknowledge that you are ready to monitor this run, then finish this initialization turn.",
+        ].join("\n\n"), model: state.model, effort: state.effort as any,
         permissionProfile: state.permissionProfile as any, bridge }, (event) => { const id = options.store.appendEvent(event); broadcast({ ...event, id }); });
-      const result = await handle.settled; if (result.exitCode !== 0 || !result.session) throw Object.assign(new Error(result.error ?? "orchestrator failed to start"), { statusCode: 502 });
+      const result = await handle.settled;
+      if (result.exitCode !== 0 || !result.session) {
+        options.store.setOrchestratorSession(fleet.id, undefined, "unavailable", state.failureCount + 1);
+        options.store.setFleetStatus(fleet.id, "paused_orchestrator_unavailable");
+        throw Object.assign(new Error(result.error ?? "orchestrator failed to start"), { statusCode: 502 });
+      }
       options.store.setOrchestratorSession(fleet.id, result.session.id, "ready", 0);
+      await scheduler.tick(request.params.id);
+      return { ok: true };
     }
     await scheduler.confirmAndLaunch(request.params.id, request.body.fullAccessConfirm === true); return { ok: true };
   });

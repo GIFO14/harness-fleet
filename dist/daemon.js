@@ -344,7 +344,7 @@ function emitLine(spec, sink, launch, line, stream) {
   }
   const mapped = launch.parse(raw, stream) ?? { type: "process.output", payload: { stream, text: line } };
   void sink({ fleetId: spec.fleetId, nodeId: spec.nodeId, attemptId: spec.attemptId, at: (/* @__PURE__ */ new Date()).toISOString(), raw, ...mapped });
-  return { session: launch.sessionFrom?.(raw), final: launch.finalFrom?.(raw) };
+  return { session: launch.sessionFrom?.(raw), final: launch.finalFrom?.(raw), closeInput: launch.closeInputWhen?.(raw) };
 }
 function launchProcess(harness, spec, sink, launch) {
   const executable = resolvedCommand(launch.command);
@@ -372,6 +372,7 @@ function launchProcess(harness, spec, sink, launch) {
       const found = emitLine(spec, sink, launch, line, stream);
       sessionId = found.session ?? sessionId;
       finalMessage = found.final ?? finalMessage;
+      if (found.closeInput && !child.stdin.destroyed) child.stdin.end();
     }
   };
   child.stdout.on("data", (x) => consume("stdout", x));
@@ -1033,7 +1034,8 @@ var PiAdapter = class {
         const event = object(value);
         const message = object(event?.message);
         return event?.type === "message_end" && message?.role === "assistant" ? textContent(message.content) : void 0;
-      }
+      },
+      closeInputWhen: (value) => object(value)?.type === "agent_end"
     });
     void run.settled.then((result) => {
       if (result.session) this.bridges.set(result.session.id, spec.bridge);
@@ -1074,7 +1076,8 @@ var PiAdapter = class {
         const event = object(value);
         const response = object(event?.message);
         return event?.type === "message_end" && response?.role === "assistant" ? textContent(response.content) : void 0;
-      }
+      },
+      closeInputWhen: (value) => object(value)?.type === "agent_end"
     });
     this.runs.set(run.id, run);
     return run;
@@ -1313,7 +1316,7 @@ async function createServer(options) {
   const app2 = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 });
   await app2.register(cookie, { secret: options.adminToken });
   await app2.register(websocket);
-  const adapters = /* @__PURE__ */ new Map([["pi", new PiAdapter()], ["claude-code", new ClaudeCodeAdapter()], ["codex", new CodexAdapter()]]);
+  const adapters = options.adapters ?? /* @__PURE__ */ new Map([["pi", new PiAdapter()], ["claude-code", new ClaudeCodeAdapter()], ["codex", new CodexAdapter()]]);
   for (const orphan of options.store.recoverRunning()) {
     if (orphan.pid) {
       if (process.platform === "win32") spawnSync2("taskkill", ["/PID", String(orphan.pid), "/T", "/F"], { windowsHide: true });
@@ -1507,6 +1510,8 @@ async function createServer(options) {
     const state = options.store.getOrchestrator(request.params.id);
     if (!fleet || !state) throw Object.assign(new Error("fleet not found"), { statusCode: 404 });
     if (!state.sessionId) {
+      options.store.setOrchestratorSession(fleet.id, void 0, "starting", state.failureCount);
+      await scheduler.confirmAndLaunch(request.params.id, request.body.fullAccessConfirm === true);
       const adapter = adapters.get(state.harness);
       const token = options.store.issueToken({ scope: "orchestrator", fleetId: fleet.id }, 7 * 24 * 60 * 6e4);
       const isPi = state.harness === "pi";
@@ -1516,8 +1521,14 @@ async function createServer(options) {
         nodeId: "orchestrator",
         attemptId: randomUUID3(),
         cwd: fleet.repoPath,
-        prompt: `Operate this human-approved fleet. Goal: ${fleet.spec.goal}
-Plan: ${JSON.stringify(fleet.spec)}`,
+        prompt: [
+          "This fleet has already been confirmed by a human and launched by the daemon.",
+          "Do not run `fleet launch`, do not create another fleet, and do not re-plan it.",
+          "Act as its lead agent from now on. Use the Harness Fleet bridge to inspect reports, react to events, message workers, and apply only in-scope controls.",
+          `Goal: ${fleet.spec.goal}`,
+          `Approved plan: ${JSON.stringify(fleet.spec)}`,
+          "Acknowledge that you are ready to monitor this run, then finish this initialization turn."
+        ].join("\n\n"),
         model: state.model,
         effort: state.effort,
         permissionProfile: state.permissionProfile,
@@ -1527,8 +1538,14 @@ Plan: ${JSON.stringify(fleet.spec)}`,
         broadcast({ ...event, id });
       });
       const result = await handle.settled;
-      if (result.exitCode !== 0 || !result.session) throw Object.assign(new Error(result.error ?? "orchestrator failed to start"), { statusCode: 502 });
+      if (result.exitCode !== 0 || !result.session) {
+        options.store.setOrchestratorSession(fleet.id, void 0, "unavailable", state.failureCount + 1);
+        options.store.setFleetStatus(fleet.id, "paused_orchestrator_unavailable");
+        throw Object.assign(new Error(result.error ?? "orchestrator failed to start"), { statusCode: 502 });
+      }
       options.store.setOrchestratorSession(fleet.id, result.session.id, "ready", 0);
+      await scheduler.tick(request.params.id);
+      return { ok: true };
     }
     await scheduler.confirmAndLaunch(request.params.id, request.body.fullAccessConfirm === true);
     return { ok: true };
